@@ -1,32 +1,37 @@
 import argparse
 import socket
 import threading
-import random
 import time
+import json
 
 class Broker():
     def __init__(self, period):
-        self.period = period
+        #server
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_address = "localhost"
         self.server_port = 50000
-        self.buffer = 1024
         self.tuple_connection = (self.server_address, self.server_port)
+        self.buffer = 1024
+
+        #market connection
         self.market_port = 51000
-        
-        self.tcurrency = ['BRENTCMDUSD', 
-                          'BTCUSD', 
-                          'EURUSD', 
-                          'GBPUSD', 
-                          'USA30IDXUSD', 
-                          'USA500IDXUSD', 
-                          'USATECHIDXUSD',
-                          'XAGUSD',
-                          'XAUUSD',]
-        
-        #Se selecciona una moneda aleatoria y se llama al mercado
-        currency = random.choice(self.tcurrency)
-        self.handler_markets(currency)
+
+        #conditions
+        self.data_condition = threading.Condition()
+        self.client_condition = threading.Condition()
+        self.lock = threading.Lock()
+
+        #variables
+        self.clients = []
+        self.status = False
+        self.period = period
+        self.tcurrency = ['BRENTCMDUSD', 'BTCUSD', 'EURUSD', 'GBPUSD', 'USA30IDXUSD', 'USA500IDXUSD', 'USATECHIDXUSD', 'XAGUSD', 'XAUUSD',]
+        self.data = {}
+
+        print("Starting markets...")
+        for c in self.tcurrency:
+            h = threading.Thread(target=self.handler_markets, args=(c,))
+            h.start()
 
 
         print(f"Broker running.\nDir IP: {self.server_address}\nPORT: {self.server_port}")
@@ -38,37 +43,73 @@ class Broker():
         while True:
             client_connection , client_address = self.server_socket.accept()
             client_thread = threading.Thread(target=self.handler_client, args=(client_connection, client_address))
+            self.clients.append(client_thread)
             client_thread.start()
+            
     
     #Gestiona la conexion del cliente
     def handler_client(self, client_connection, client_address):
         print(f'New incomming connection is coming from: {client_address[0]}:{client_address[1]}')
 
-        while True:
-            data = client_connection.recv(self.buffer).decode()
+        self.client_status()
+        
+        #Esperar a recibir datos
+        with self.data_condition:
+            self.data_condition.wait()
 
-            if data.startswith("Data:"):
-                print(data)
+        #Envio de datos al cliente
+        client_connection.send(json.dumps(self.data).encode())
 
-            if data == "QUIT":
-                break
+        with self.data_condition:
+            self.data_condition.wait()
+
 
         print(f'Now, client {client_address[0]}:{client_address[1]} is disconnected...')
+        self.clients.remove(threading.current_thread())
         client_connection.close()
 
     def handler_markets(self, currency):
+        market_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        market_socket.connect((self.server_address, self.market_port))
+        market_socket.send(b'currency: '+currency.encode())
+        time.sleep(0.0001)
+        market_socket.send(b'period: '+self.period.encode())
 
-        self.market_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        
-        self.market_socket.connect((self.server_address, self.market_port))
-        
-        self.market_socket.send(b'currency: '+currency.encode())
-        time.sleep(0.001)
-        self.market_socket.send(b'period: '+self.period.encode())
-        
-        
+        #Espera a que se conecten clientes
+        with self.client_condition:
+            self.client_condition.wait()
 
+        market_socket.send(b'send')
 
+        data = market_socket.recv(self.buffer).decode()
+        while not data.startswith("data:"):
+            data = market_socket.recv(self.buffer).decode()
+        
+        #Seccion critica, se almacenan los datos en la variable self.data
+        self.lock.acquire()
+        self.data[currency] = data.split('data:')[1]
+        self.lock.release()
+
+        #Avisa a los clientes que se van a enviar datos
+        with self.data_condition:
+            self.data_condition.notify_all()
+            time.sleep(0.0001)
+
+    #Determinar si hay conexiones
+    #Si ya habian conexiones recibe los datos, si no, envia la señal para empezar a recibirlos
+    def client_status(self):
+
+        if self.status == True:
+            None
+        elif len(self.clients) > 0:
+            with self.client_condition:
+                self.status = True
+                self.client_condition.notify_all()
+                time.sleep(0.0001)
+        else:
+            self.status = False
+        
+        
 def main(args):
     if args.period != None:
         period = args.period.upper()

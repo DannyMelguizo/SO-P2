@@ -1,6 +1,7 @@
 import socket
 import threading
-import os
+import pandas as pd
+import json
 
 class Mercado():
     def __init__(self):
@@ -9,6 +10,9 @@ class Mercado():
         self.server_port = 51000
         self.buffer = 1024
         self.tuple_connection = (self.server_address, self.server_port)
+
+        self.rows = ["Date", "Open", "High", "Low", "Close", "Volume"]
+        self.nrows = 100
         
         print(f"Market running.\nDir IP: {self.server_address}\nPORT: {self.server_port}")
 
@@ -25,6 +29,8 @@ class Mercado():
         print(f'New incomming connection is coming from: {client_address[0]}:{client_address[1]}')
         currency = ''
         period = ''
+        current = 0
+        start = 0
 
         while True:
             data = client_connection.recv(self.buffer).decode()
@@ -32,19 +38,33 @@ class Mercado():
             while not data.startswith("currency:"):
                 data = client_connection.recv(self.buffer).decode()
             
-            data = data.split(' ')
-            currency = data[1]
+            currency = data.split(' ')[1]
 
             data = client_connection.recv(self.buffer).decode()
             while not data.startswith("period:"):
                 data = client_connection.recv(self.buffer).decode()
             
-            data = data.split(' ')
-            period = data[1]
+            period = data.split(' ')[1]
 
             file = f'{currency}/{currency}_{period}.csv'
 
-            print(f"Im waiting for a signal to send data - {client_address[0]}:{client_address[1]}")
+            content = pd.read_csv(file, parse_dates=True, names=self.rows, skiprows=range(0,start), nrows=self.nrows)
+
+            print(f"I'm waiting for a signal to send data: {client_address[1]}")
+
+            data = client_connection.recv(self.buffer).decode()
+            while not data.startswith("send"):
+                data = client_connection.recv(self.buffer).decode()
+
+            data = content.iloc[current]
+
+            data = data.to_dict()
+
+            data = json.dumps(data)
+
+            client_connection.send(b'data:'+data.encode())
+
+            
 
             
 
