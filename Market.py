@@ -50,23 +50,31 @@ class Mercado():
 
             content = pd.read_csv(file, parse_dates=True, names=self.rows, skiprows=range(0,start), nrows=self.nrows)
 
-            print(f"I'm waiting for a signal to send data: {client_address[1]}")
+            while True:
 
-            data = client_connection.recv(self.buffer).decode()
-            while not data.startswith("send"):
+                if content.empty:
+                    break
+                elif current == self.nrows:
+                    start += self.nrows
+                    current = 0
+                    content = pd.read_csv(file, parse_dates=True, names=self.rows, skiprows=range(0,start), nrows=self.nrows)
+
+                #Esperan señal para enviar datos
                 data = client_connection.recv(self.buffer).decode()
+                while not data.startswith("send"):
+                    data = client_connection.recv(self.buffer).decode()
+                
+                data = content.iloc[current]
 
-            data = content.iloc[current]
+                data = data.to_dict()
 
-            data = data.to_dict()
+                data = json.dumps(data)
 
-            data = json.dumps(data)
+                client_connection.send(b'data:'+data.encode())
 
-            client_connection.send(b'data:'+data.encode())
-
+                current += 1
             
-
-            
+            break
 
         print(f'Now, client {client_address[0]}:{client_address[1]} is disconnected...')
         client_connection.close()

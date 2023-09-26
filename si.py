@@ -1,14 +1,23 @@
-import pandas as pd
+import mplfinance as mpf
+import matplotlib.pyplot as plt
 
-rows = ["Date", "Open", "High", "Low", "Close", "Volume"]
-nrows = 100
-url = 'BTCUSD/BTCUSD_H1.csv'
+# Crear un objeto que almacene la figura y los ejes
+fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(12, 8))
 
-actual =  0
+# Datos de ejemplo
+data = mpf.sample_data.get_sample_data()
 
-df = pd.read_csv(url, parse_dates=True, index_col=0, names=rows, nrows=nrows)
+# Crear gráficos mplfinance y asignarlos a ejes específicos
+mpf.plot(data[:50], type='candle', ax=axes[0, 0], title="Gráfico 1")
+mpf.plot(data[50:100], type='candle', ax=axes[0, 1], title="Gráfico 2")
+mpf.plot(data[100:150], type='candle', ax=axes[1, 0], title="Gráfico 3")
+mpf.plot(data[150:200], type='candle', ax=axes[1, 1], title="Gráfico 4")
+
+# Ajustar el espacio entre los gráficos
+plt.tight_layout()
+
+# Mostrar la figura
+plt.show()
 
 
-szs = df.to_dict(orient='index')
 
-print(next(iter(szs.items())))

@@ -20,13 +20,19 @@ class Broker():
         self.data_condition = threading.Condition()
         self.client_condition = threading.Condition()
         self.lock = threading.Lock()
+        self.semaphore_confirm = threading.Semaphore(0)
+        self.before_start_condition = threading.Condition()
 
         #variables
         self.clients = []
+        self.active_clients = 0
         self.status = False
         self.period = period
         self.tcurrency = ['BRENTCMDUSD', 'BTCUSD', 'EURUSD', 'GBPUSD', 'USA30IDXUSD', 'USA500IDXUSD', 'USATECHIDXUSD', 'XAGUSD', 'XAUUSD',]
         self.data = {}
+        self.confirm_clients = 0
+        self.confirm_markets = 0
+
 
         print("Starting markets...")
         for c in self.tcurrency:
@@ -51,22 +57,80 @@ class Broker():
     def handler_client(self, client_connection, client_address):
         print(f'New incomming connection is coming from: {client_address[0]}:{client_address[1]}')
 
-        self.client_status()
+        try:
+
+            while True:
+
+                if self.active_clients != 0:
+                    with self.before_start_condition:
+                        self.before_start_condition.wait()
+
+                
+                self.lock.acquire()
+                self.active_clients += 1
+                self.lock.release()
+
+                #Notifica que hay cliente
+                if len(self.clients) > 0:
+                    with self.client_condition:
+                        self.client_condition.notify_all()
+                        self.status = True
+                        time.sleep(0.001)
+
+
+                #Esperar a recibir datos
+                self.lock.acquire()
+                self.confirm_clients += 1
+                self.lock.release()
+
+                
+                with self.data_condition:
+                    self.data_condition.wait()
+
+                
+                self.lock.acquire()
+                self.confirm_clients = 0
+                self.lock.release()
+
+                #Envio de datos al cliente
+                client_connection.send(json.dumps(self.data).encode())
+                time.sleep(0.001)
+
+                data = client_connection.recv(self.buffer).decode()
+                while not data.startswith("confirm"):
+                    data = client_connection.recv(self.buffer).decode()
+
+                #Seccion critica, se aumenta el numero de confirmaciones para dar paso al semaforo
+                self.lock.acquire()
+                self.confirm_clients += 1
+                self.lock.release()
+
+                while True:
+                    if self.confirm_clients == self.active_clients:
+                        self.lock.acquire()
+                        self.confirm_clients = 0
+                        self.active_clients = 0
+                        self.lock.release()
+                        self.semaphore_confirm.release()
+                        break
+                    
+                
+
+
+            print(f'Now, client {client_address[0]}:{client_address[1]} is disconnected...')
+
+        except ConnectionResetError:
+            print(f"Client {client_address[0]}:{client_address[1]} unexpectedly disconected.")
+        except Exception as e:
+            print(f"Error {client_address[0]}:{client_address[1]} - {str(e)}")
+        finally:
+            client_connection.close()
+            self.clients.remove(threading.current_thread())
+            self.active_clients -= 1
+            self.status = False
+
+
         
-        #Esperar a recibir datos
-        with self.data_condition:
-            self.data_condition.wait()
-
-        #Envio de datos al cliente
-        client_connection.send(json.dumps(self.data).encode())
-
-        with self.data_condition:
-            self.data_condition.wait()
-
-
-        print(f'Now, client {client_address[0]}:{client_address[1]} is disconnected...')
-        self.clients.remove(threading.current_thread())
-        client_connection.close()
 
     def handler_markets(self, currency):
         market_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -75,39 +139,43 @@ class Broker():
         time.sleep(0.0001)
         market_socket.send(b'period: '+self.period.encode())
 
-        #Espera a que se conecten clientes
-        with self.client_condition:
-            self.client_condition.wait()
 
-        market_socket.send(b'send')
-
-        data = market_socket.recv(self.buffer).decode()
-        while not data.startswith("data:"):
-            data = market_socket.recv(self.buffer).decode()
-        
-        #Seccion critica, se almacenan los datos en la variable self.data
-        self.lock.acquire()
-        self.data[currency] = data.split('data:')[1]
-        self.lock.release()
-
-        #Avisa a los clientes que se van a enviar datos
-        with self.data_condition:
-            self.data_condition.notify_all()
-            time.sleep(0.0001)
-
-    #Determinar si hay conexiones
-    #Si ya habian conexiones recibe los datos, si no, envia la señal para empezar a recibirlos
-    def client_status(self):
-
-        if self.status == True:
-            None
-        elif len(self.clients) > 0:
+        while True:
+            #Espera a que se conecten clientes
             with self.client_condition:
-                self.status = True
-                self.client_condition.notify_all()
+                self.client_condition.wait()
+            
+            while True:
+                
+                if self.status == False:
+                    break
+
+                market_socket.send(b'send')
+
+                data = market_socket.recv(self.buffer).decode()
+                while not data.startswith("data:"):
+                    data = market_socket.recv(self.buffer).decode()
+                
+                #Seccion critica, se almacenan los datos en la variable self.data
+                self.lock.acquire()
+                self.data[currency] = data.split('data:')[1]
+                self.lock.release()
+
+                #Avisa a los clientes que se van a enviar datos
+                while True:
+                    if self.confirm_clients == self.active_clients:
+                        with self.data_condition:
+                            self.data_condition.notify_all()
+                            time.sleep(0.0001)
+                            break      
+                
+                self.semaphore_confirm.acquire()
                 time.sleep(0.0001)
-        else:
-            self.status = False
+
+                with self.before_start_condition:
+                    self.before_start_condition.notify_all()
+                    time.sleep(0.0001)
+
         
         
 def main(args):
