@@ -41,22 +41,26 @@ class trading():
         self.df = None
 
     def add_data(self):
-        data = json.loads(dictionary[self.currency])
-        self.date.append(data['Date'])
+        try :
+            data = json.loads(dictionary[self.currency])
+            self.date.append(data['Date'])
 
-        for key in fields:
-            self.content[key].append(data[key])
+            for key in fields:
+                self.content[key].append(data[key])
 
-        self.df = pd.DataFrame(self.content, index=self.date)
-        self.df = self.df.drop_duplicates()
-        self.df.index.name = 'Date'
+            self.df = pd.DataFrame(self.content, index=self.date)
+            self.df = self.df.drop_duplicates()
+            self.df.index.name = 'Date'
+            
+            self.df.index = pd.to_datetime(self.df.index)
         
-        self.df.index = pd.to_datetime(self.df.index)
+        except:
+            None
 
     def plot(self):
-        mpf.plot(self.df, **pkwargs, ax=main_axes[self.positionx, self.positiony])
+        mpf.plot(self.df, **pkwargs, axtitle=f"Market {self.currency}", ax=main_axes[self.positionx, self.positiony])
         plt.draw()
-        plt.pause(0.0001)
+        plt.pause(0.00001)
 
 
 def main():
