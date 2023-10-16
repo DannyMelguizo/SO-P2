@@ -32,50 +32,57 @@ class Mercado():
         current = 0
         start = 0
 
-        while True:
-            data = client_connection.recv(self.buffer).decode()
-
-            while not data.startswith("currency:"):
-                data = client_connection.recv(self.buffer).decode()
-            
-            currency = data.split(' ')[1]
-
-            data = client_connection.recv(self.buffer).decode()
-            while not data.startswith("period:"):
-                data = client_connection.recv(self.buffer).decode()
-            
-            period = data.split(' ')[1]
-
-            file = f'{currency}/{currency}_{period}.csv'
-
-            content = pd.read_csv(file, parse_dates=True, names=self.rows, skiprows=range(0,start), nrows=self.nrows)
+        try: 
 
             while True:
-
-                if content.empty:
-                    break
-                elif current == self.nrows:
-                    start += self.nrows
-                    current = 0
-                    content = pd.read_csv(file, parse_dates=True, names=self.rows, skiprows=range(0,start), nrows=self.nrows)
-
-                #Esperan señal para enviar datos
                 data = client_connection.recv(self.buffer).decode()
-                while not data.startswith("send"):
+
+                while not data.startswith("currency:"):
                     data = client_connection.recv(self.buffer).decode()
                 
-                data = content.iloc[current]
+                currency = data.split(' ')[1]
 
-                data = data.to_dict()
+                data = client_connection.recv(self.buffer).decode()
+                while not data.startswith("period:"):
+                    data = client_connection.recv(self.buffer).decode()
+                
+                period = data.split(' ')[1]
 
-                client_connection.send(b'data:'+json.dumps(data).encode())
+                file = f'{currency}/{currency}_{period}.csv'
 
-                current += 1
-            
-            break
+                content = pd.read_csv(file, parse_dates=True, names=self.rows, skiprows=range(0,start), nrows=self.nrows)
 
-        print(f'Now, client {client_address[0]}:{client_address[1]} is disconnected...')
-        client_connection.close()
+                while True:
+
+                    if content.empty:
+                        break
+                    elif current == self.nrows:
+                        start += self.nrows
+                        current = 0
+                        content = pd.read_csv(file, parse_dates=True, names=self.rows, skiprows=range(0,start), nrows=self.nrows)
+
+                    #Esperan señal para enviar datos
+                    data = client_connection.recv(self.buffer).decode()
+                    while not data.startswith("send"):
+                        data = client_connection.recv(self.buffer).decode()
+                    
+                    data = content.iloc[current]
+
+                    data = data.to_dict()
+
+                    client_connection.send(b'data:'+json.dumps(data).encode())
+
+                    current += 1
+                
+                break
+
+            print(f'Now, client {client_address[0]}:{client_address[1]} is disconnected...')
+            client_connection.close()
+        
+        except ConnectionResetError:
+            print(f"Client {client_address[0]}:{client_address[1]} unexpectedly disconected.")
+        except Exception as e:
+            print(f"Error {client_address[0]}:{client_address[1]} - {str(e)}")
         
 
 

@@ -17,21 +17,20 @@ class Broker():
         self.market_port = 51000
 
         #conditions
-        self.data_condition = threading.Condition()
         self.client_condition = threading.Condition()
         self.lock = threading.Lock()
-        self.semaphore_confirm = threading.Semaphore(0)
-        self.before_start_condition = threading.Condition()
 
         #variables
         self.clients = []
         self.active_clients = 0
         self.status = False
         self.period = period
-        self.tcurrency = ['BRENTCMDUSD', 'BTCUSD', 'EURUSD', 'GBPUSD', 'USA30IDXUSD', 'USA500IDXUSD', 'USATECHIDXUSD', 'XAGUSD', 'XAUUSD',]
+        self.tcurrency = ["BRENTCMDUSD", "BTCUSD", "EURUSD", "GBPUSD", "USA30IDXUSD", "USA500IDXUSD", "USATECHIDXUSD", "XAGUSD", "XAUUSD",]
         self.data = {}
         self.confirm_clients = 0
         self.confirm_markets = 0
+
+        open("archivo.txt", 'x').close()
 
 
         print("Starting markets...")
@@ -56,66 +55,30 @@ class Broker():
     #Gestiona la conexion del cliente
     def handler_client(self, client_connection, client_address):
         print(f'New incomming connection is coming from: {client_address[0]}:{client_address[1]}')
+        current = 0
 
         try:
-
             while True:
+                with self.client_condition:
+                    self.client_condition.notify_all()
+                    time.sleep(0.001)
 
-                if self.active_clients != 0:
-                    with self.before_start_condition:
-                        self.before_start_condition.wait()
-
+                time.sleep(0.0001)
                 
-                self.lock.acquire()
-                self.active_clients += 1
-                self.lock.release()
+                with open("archivo.txt", 'r') as archivo:
 
-                #Notifica que hay cliente
-                if len(self.clients) > 0:
-                    with self.client_condition:
-                        self.client_condition.notify_all()
-                        self.status = True
-                        time.sleep(0.001)
+                    file = archivo.readlines()
 
+                    data = file[current]
 
-                #Esperar a recibir datos
-                self.lock.acquire()
-                self.confirm_clients += 1
-                self.lock.release()
+                    client_connection.send(data.encode())
+                    time.sleep(0.001)
 
-                
-                with self.data_condition:
-                    self.data_condition.wait()
-
-                
-                self.lock.acquire()
-                self.confirm_clients = 0
-                self.lock.release()
-
-                #Envio de datos al cliente
-                client_connection.send(json.dumps(self.data).encode())
-                time.sleep(0.001)
-
-                data = client_connection.recv(self.buffer).decode()
-                while not data.startswith("confirm"):
                     data = client_connection.recv(self.buffer).decode()
+                    while not data.startswith("confirm"):
+                        data = client_connection.recv(self.buffer).decode()
 
-                #Seccion critica, se aumenta el numero de confirmaciones para dar paso al semaforo
-                self.lock.acquire()
-                self.confirm_clients += 1
-                self.lock.release()
-
-                while True:
-                    if self.confirm_clients == self.active_clients:
-                        self.lock.acquire()
-                        self.confirm_clients = 0
-                        self.active_clients = 0
-                        self.lock.release()
-                        self.semaphore_confirm.release()
-                        break
-                    
-                
-
+                    current += 1
 
             print(f'Now, client {client_address[0]}:{client_address[1]} is disconnected...')
 
@@ -123,11 +86,6 @@ class Broker():
             print(f"Client {client_address[0]}:{client_address[1]} unexpectedly disconected.")
         except Exception as e:
             print(f"Error {client_address[0]}:{client_address[1]} - {str(e)}")
-        finally:
-            client_connection.close()
-            self.clients.remove(threading.current_thread())
-            self.active_clients -= 1
-            self.status = False
 
 
         
@@ -146,9 +104,6 @@ class Broker():
                 self.client_condition.wait()
             
             while True:
-                
-                if self.status == False:
-                    break
 
                 market_socket.send(b'send')
 
@@ -156,25 +111,15 @@ class Broker():
                 while not data.startswith("data:"):
                     data = market_socket.recv(self.buffer).decode()
                 
-                #Seccion critica, se almacenan los datos en la variable self.data
+                #Seccion critica, se almacenan los datos en el archivo
                 self.lock.acquire()
-                self.data[currency] = data.split('data:')[1]
+                with open("archivo.txt", 'a') as archivo:
+                    dt = {currency: eval(data.split('data:')[1])}
+                    dt = str(dt).replace("'", '"')
+
+                    archivo.write(dt+'\n')
                 self.lock.release()
 
-                #Avisa a los clientes que se van a enviar datos
-                while True:
-                    if self.confirm_clients == self.active_clients:
-                        with self.data_condition:
-                            self.data_condition.notify_all()
-                            time.sleep(0.0001)
-                            break      
-                
-                self.semaphore_confirm.acquire()
-                time.sleep(0.0001)
-
-                with self.before_start_condition:
-                    self.before_start_condition.notify_all()
-                    time.sleep(0.0001)
 
         
         

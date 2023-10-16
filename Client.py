@@ -31,49 +31,78 @@ data_condition = threading.Condition()
 lock = threading.Lock()
 
 
-class trading():
-    def __init__(self, currency, positionx, positiony):
-        self.positionx = positionx
-        self.positiony = positiony
-        self.currency = currency
-        self.content = {"Open" : [], "High" : [], "Low" : [], "Close" : []}
-        self.date = []
-        self.df = None
+def trading(currency, positionx, positiony):
+    global dictionary, main_axes, main_fig
 
-    def add_data(self):
-        data = dictionary[self.currency]
-        self.date.append(data['Date'])
+    content = {"Open" : [], "High" : [], "Low" : [], "Close" : []}
+    date = []
+    df = None
 
-        for key in fields:
-            self.content[key].append(data[key])
+    while True:
 
-        self.df = pd.DataFrame(self.content, index=self.date)
-        self.df.index.name = 'Date'
-        
-        self.df.index = pd.to_datetime(self.df.index)
+        with data_condition:
+            data_condition.wait()
 
-    def plot(self):
-        mpf.plot(self.df, **pkwargs, axtitle=f"Market {self.currency}", ax=main_axes[self.positionx, self.positiony])
-        plt.draw()
-        plt.pause(0.00001)
+        if currency in dictionary:
+
+            data = dictionary[currency]
+
+            date.append(data['Date'])
+
+            for key in fields:
+                content[key].append(data[key])
+
+            df = pd.DataFrame(content, index=date)
+            df.index.name = 'Date'
+            
+            df.index = pd.to_datetime(df.index)
+
+            lock.acquire()
+            mpf.plot(df, **pkwargs, axtitle=f"Market {currency}", ax=main_axes[positionx, positiony])
+            plt.draw()
+            lock.release()
+            
+        else:
+            continue
 
 
 def main():
     global dictionary, main_fig
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
     server_socket.connect(tuple_connection)
     
-    BRENTCMDUSD = trading("BRENTCMDUSD", 0, 0)
-    BTCUSD = trading("BTCUSD", 0, 1)
-    EURUSD = trading("EURUSD", 0, 2)
-    GBPUSD = trading("GBPUSD", 1, 0)
-    USA30IDXUSD = trading("USA30IDXUSD", 1, 1)
-    USA500IDXUSD = trading("USA500IDXUSD", 1, 2)
-    USATECHIDXUSD = trading("USATECHIDXUSD", 2, 0)
-    XAGUSD = trading("XAGUSD", 2, 1)
-    XAUUSD = trading("XAUUSD", 2, 2)
+
+
+    BRENTCMDUSD = threading.Thread(target=trading, args=("BRENTCMDUSD", 0, 0))  #trading("BRENTCMDUSD", 0, 0)
+    BTCUSD = threading.Thread(target=trading, args=("BTCUSD", 0, 1))  #trading("BTCUSD", 0, 1)
+    EURUSD = threading.Thread(target=trading, args=("EURUSD", 0, 2))  #trading("EURUSD", 0, 2)
+    GBPUSD = threading.Thread(target=trading, args=("GBPUSD", 1, 0))  #trading("GBPUSD", 1, 0)
+    USA30IDXUSD = threading.Thread(target=trading, args=("USA30IDXUSD", 1, 1))  #trading("USA30IDXUSD", 1, 1)
+    USA500IDXUSD = threading.Thread(target=trading, args=("USA500IDXUSD", 1, 2))  #trading("USA500IDXUSD", 1, 2)
+    USATECHIDXUSD = threading.Thread(target=trading, args=("USATECHIDXUSD", 2, 0))  #trading("USATECHIDXUSD", 2, 0)
+    XAGUSD = threading.Thread(target=trading, args=("XAGUSD", 2, 1))  #trading("XAGUSD", 2, 1)
+    XAUUSD = threading.Thread(target=trading, args=("XAUUSD", 2, 2))  #trading("XAUUSD", 2, 2)
+
+    BRENTCMDUSD.daemon = True
+    BTCUSD.daemon = True
+    EURUSD.daemon = True
+    GBPUSD.daemon = True
+    USA30IDXUSD.daemon = True
+    USA500IDXUSD.daemon = True
+    USATECHIDXUSD.daemon = True
+    XAGUSD.daemon = True
+    XAUUSD.daemon = True
+
+    BRENTCMDUSD.start()
+    BTCUSD.start()
+    EURUSD.start()
+    GBPUSD.start()
+    USA30IDXUSD.start()
+    USA500IDXUSD.start()
+    USATECHIDXUSD.start()
+    XAGUSD.start()
+    XAUUSD.start()
 
     while True:
 
@@ -83,36 +112,13 @@ def main():
 
         dictionary = json.loads(data)
 
-        if 'BRENTCMDUSD' in dictionary:
-            BRENTCMDUSD.add_data()
-            BRENTCMDUSD.plot()
-        if 'BTCUSD' in dictionary:
-            BTCUSD.add_data()
-            BTCUSD.plot()
-        if 'EURUSD' in dictionary:
-            EURUSD.add_data()
-            EURUSD.plot()
-        if 'GBPUSD' in dictionary:
-            GBPUSD.add_data()
-            GBPUSD.plot()
-        if 'USA30IDXUSD' in dictionary:
-            USA30IDXUSD.add_data()
-            USA30IDXUSD.plot()
-        if 'USA500IDXUSD' in dictionary:
-            USA500IDXUSD.add_data()
-            USA500IDXUSD.plot()
-        if 'USATECHIDXUSD' in dictionary:
-            USATECHIDXUSD.add_data()
-            USATECHIDXUSD.plot()
-        if 'XAGUSD' in dictionary:
-            XAGUSD.add_data()
-            XAGUSD.plot()
-        if 'XAUUSD' in dictionary:
-            XAUUSD.add_data()
-            XAUUSD.plot()
-
+        plt.pause(0.0001)
         plt.tight_layout()
         plt.show()
+
+        with data_condition:
+            data_condition.notify_all()
+            time.sleep(0.001)
 
         server_socket.send(b'confirm')
 
