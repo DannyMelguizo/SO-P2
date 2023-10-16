@@ -84,16 +84,6 @@ def main():
     XAGUSD = threading.Thread(target=trading, args=("XAGUSD", 2, 1))  #trading("XAGUSD", 2, 1)
     XAUUSD = threading.Thread(target=trading, args=("XAUUSD", 2, 2))  #trading("XAUUSD", 2, 2)
 
-    BRENTCMDUSD.daemon = True
-    BTCUSD.daemon = True
-    EURUSD.daemon = True
-    GBPUSD.daemon = True
-    USA30IDXUSD.daemon = True
-    USA500IDXUSD.daemon = True
-    USATECHIDXUSD.daemon = True
-    XAGUSD.daemon = True
-    XAUUSD.daemon = True
-
     BRENTCMDUSD.start()
     BTCUSD.start()
     EURUSD.start()
