@@ -68,9 +68,7 @@ class Mercado():
 
                 data = data.to_dict()
 
-                data = json.dumps(data)
-
-                client_connection.send(b'data:'+data.encode())
+                client_connection.send(b'data:'+json.dumps(data).encode())
 
                 current += 1
             

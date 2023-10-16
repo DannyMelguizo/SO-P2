@@ -41,21 +41,16 @@ class trading():
         self.df = None
 
     def add_data(self):
-        try :
-            data = json.loads(dictionary[self.currency])
-            self.date.append(data['Date'])
+        data = dictionary[self.currency]
+        self.date.append(data['Date'])
 
-            for key in fields:
-                self.content[key].append(data[key])
+        for key in fields:
+            self.content[key].append(data[key])
 
-            self.df = pd.DataFrame(self.content, index=self.date)
-            self.df = self.df.drop_duplicates()
-            self.df.index.name = 'Date'
-            
-            self.df.index = pd.to_datetime(self.df.index)
+        self.df = pd.DataFrame(self.content, index=self.date)
+        self.df.index.name = 'Date'
         
-        except:
-            None
+        self.df.index = pd.to_datetime(self.df.index)
 
     def plot(self):
         mpf.plot(self.df, **pkwargs, axtitle=f"Market {self.currency}", ax=main_axes[self.positionx, self.positiony])
@@ -88,26 +83,33 @@ def main():
 
         dictionary = json.loads(data)
 
-        BRENTCMDUSD.add_data()
-        BTCUSD.add_data()
-        EURUSD.add_data()
-        GBPUSD.add_data()
-        USA30IDXUSD.add_data()
-        USA500IDXUSD.add_data()
-        USATECHIDXUSD.add_data()
-        XAGUSD.add_data()
-        XAUUSD.add_data()
-
-
-        BRENTCMDUSD.plot()
-        BTCUSD.plot()
-        EURUSD.plot()
-        GBPUSD.plot()
-        USA30IDXUSD.plot()
-        USA500IDXUSD.plot()
-        USATECHIDXUSD.plot()
-        XAGUSD.plot()
-        XAUUSD.plot()
+        if 'BRENTCMDUSD' in dictionary:
+            BRENTCMDUSD.add_data()
+            BRENTCMDUSD.plot()
+        if 'BTCUSD' in dictionary:
+            BTCUSD.add_data()
+            BTCUSD.plot()
+        if 'EURUSD' in dictionary:
+            EURUSD.add_data()
+            EURUSD.plot()
+        if 'GBPUSD' in dictionary:
+            GBPUSD.add_data()
+            GBPUSD.plot()
+        if 'USA30IDXUSD' in dictionary:
+            USA30IDXUSD.add_data()
+            USA30IDXUSD.plot()
+        if 'USA500IDXUSD' in dictionary:
+            USA500IDXUSD.add_data()
+            USA500IDXUSD.plot()
+        if 'USATECHIDXUSD' in dictionary:
+            USATECHIDXUSD.add_data()
+            USATECHIDXUSD.plot()
+        if 'XAGUSD' in dictionary:
+            XAGUSD.add_data()
+            XAGUSD.plot()
+        if 'XAUUSD' in dictionary:
+            XAUUSD.add_data()
+            XAUUSD.plot()
 
         plt.tight_layout()
         plt.show()
