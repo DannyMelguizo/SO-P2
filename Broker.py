@@ -30,7 +30,10 @@ class Broker():
         self.confirm_clients = 0
         self.confirm_markets = 0
 
-        open("archivo.txt", 'x').close()
+        try:
+            open("archivo.txt", 'x').close()
+        except:
+            open("archivo.txt", 'w').close()
 
 
         print("Starting markets...")
@@ -61,7 +64,7 @@ class Broker():
             while True:
                 with self.client_condition:
                     self.client_condition.notify_all()
-                    time.sleep(0.001)
+                    time.sleep(0.0001)
 
                 time.sleep(0.0001)
                 
