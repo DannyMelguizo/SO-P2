@@ -71,7 +71,6 @@ def main():
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.connect(tuple_connection)
-    
 
 
     BRENTCMDUSD = threading.Thread(target=trading, args=("BRENTCMDUSD", 0, 0))  #trading("BRENTCMDUSD", 0, 0)
@@ -100,6 +99,7 @@ def main():
         while data == '':
             data = server_socket.recv(buffer).decode()
 
+        data = data.replace("'", '"')
         dictionary = json.loads(data)
 
         plt.pause(0.0001)

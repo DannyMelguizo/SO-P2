@@ -29,11 +29,10 @@ class Broker():
         self.data = {}
         self.confirm_clients = 0
         self.confirm_markets = 0
+        self.data_row = 0
+        self.file_name = "archivo.BYTES"
 
-        try:
-            open("archivo.txt", 'x').close()
-        except:
-            open("archivo.txt", 'w').close()
+        open(self.file_name, 'w').close()
 
 
         print("Starting markets...")
@@ -67,14 +66,16 @@ class Broker():
                     time.sleep(0.0001)
 
                 time.sleep(0.0001)
+
+                open("BTCUSD.BYTES", "rb").close()
                 
-                with open("archivo.txt", 'r') as archivo:
+                with open(self.file_name, 'rb') as archivo:
 
                     file = archivo.readlines()
 
                     data = file[current]
 
-                    client_connection.send(data.encode())
+                    client_connection.send(data)
                     time.sleep(0.001)
 
                     data = client_connection.recv(self.buffer).decode()
@@ -100,6 +101,8 @@ class Broker():
         time.sleep(0.0001)
         market_socket.send(b'period: '+self.period.encode())
 
+        open(f"{currency}.BYTES", 'w').close()
+
 
         while True:
             #Espera a que se conecten clientes
@@ -114,14 +117,17 @@ class Broker():
                 while not data.startswith("data:"):
                     data = market_socket.recv(self.buffer).decode()
                 
-                #Seccion critica, se almacenan los datos en el archivo
-                self.lock.acquire()
-                with open("archivo.txt", 'a') as archivo:
+                with open(self.file_name, 'ab') as archivo:
                     dt = {currency: eval(data.split('data:')[1])}
-                    dt = str(dt).replace("'", '"')
+                    dt = str(dt).encode("utf-8")
 
-                    archivo.write(dt+'\n')
-                self.lock.release()
+                    #Seccion critica, se almacenan los datos en el archivo
+                    self.lock.acquire()
+                    archivo.write(dt+b'\n')
+                    with open(f"{currency}.BYTES", 'ab') as pointer:
+                        pointer.write(self.data_row.to_bytes(2, "big"))
+                        self.data_row += 1
+                    self.lock.release()
 
 
         
