@@ -2,7 +2,6 @@ import argparse
 import socket
 import threading
 import time
-import json
 
 class Broker():
     def __init__(self, period):
@@ -30,7 +29,7 @@ class Broker():
         self.confirm_clients = 0
         self.confirm_markets = 0
         self.data_row = 0
-        self.file_name = "archivo.BYTES"
+        self.file_name = "archivo.txt"#"archivo.BYTES"
 
         open(self.file_name, 'w').close()
 
@@ -67,8 +66,6 @@ class Broker():
 
                 time.sleep(0.0001)
 
-                open("BTCUSD.BYTES", "rb").close()
-                
                 with open(self.file_name, 'rb') as archivo:
 
                     file = archivo.readlines()
@@ -101,7 +98,7 @@ class Broker():
         time.sleep(0.0001)
         market_socket.send(b'period: '+self.period.encode())
 
-        open(f"{currency}.BYTES", 'w').close()
+        open(f"{currency}_index.txt", 'w').close()
 
 
         while True:
@@ -124,8 +121,8 @@ class Broker():
                     #Seccion critica, se almacenan los datos en el archivo
                     self.lock.acquire()
                     archivo.write(dt+b'\n')
-                    with open(f"{currency}.BYTES", 'ab') as pointer:
-                        pointer.write(self.data_row.to_bytes(2, "big"))
+                    with open(f"{currency}_index.txt", 'a') as index:
+                        index.write(str(self.data_row)+"\n")
                         self.data_row += 1
                     self.lock.release()
 
@@ -133,10 +130,7 @@ class Broker():
         
         
 def main(args):
-    if args.period != None:
-        period = args.period.upper()
-    else:
-        period = "H1"
+    period = args.period.upper()
 
     do = Broker(period)
 
@@ -144,6 +138,6 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--period", type=str, help="Period of time")
+    parser.add_argument("-p", "--period", type=str.upper, help="Period of time", default="H1")
     args = parser.parse_args()
     main(args)

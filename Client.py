@@ -4,6 +4,7 @@ import threading
 import time
 import pandas as pd
 import mplfinance as mpf
+import argparse
 import matplotlib.pyplot as plt
 
 server_address = "localhost"
@@ -17,7 +18,6 @@ dictionary = None
 
 #Variables
 fields = ["Open", "High", "Low", "Close"]
-tcurrency = ['BRENTCMDUSD', 'BTCUSD', 'EURUSD', 'GBPUSD', 'USA30IDXUSD', 'USA500IDXUSD', 'USATECHIDXUSD', 'XAGUSD', 'XAUUSD',]
 mc = mpf.make_marketcolors(up='g', down='r')
 colors = mpf.make_mpf_style(marketcolors=mc)
 pkwargs=dict(type='candle', mav=(5,13), style=colors)
@@ -66,7 +66,7 @@ def trading(currency, positionx, positiony):
             continue
 
 
-def main():
+def main(currencies):
     global dictionary, main_fig
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -113,4 +113,15 @@ def main():
         server_socket.send(b'confirm')
 
 
-main()
+def initialize(args):
+    currencies = args.currencies
+
+    do = main(currencies)
+
+    print(f'\nstatus: {do}')
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--currencies", type=str.upper ,choices=["BRENTCMDUSD", "BTCUSD", "EURUSD", "GBPUSD", "USA30IDXUSD", "USA500IDXUSD", "USATECHIDXUSD", "XAGUSD", "XAUUSD"], default=["BRENTCMDUSD", "BTCUSD", "EURUSD", "GBPUSD", "USA30IDXUSD", "USA500IDXUSD", "USATECHIDXUSD", "XAGUSD", "XAUUSD"], nargs=argparse.REMAINDER, help="Currencies that you want to see")
+    args = parser.parse_args()
+    initialize(args)
