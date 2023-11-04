@@ -1,7 +1,6 @@
 import argparse
 import socket
 import threading
-import time
 
 class Broker():
     def __init__(self, period):
@@ -17,19 +16,16 @@ class Broker():
 
         #conditions
         self.client_condition = threading.Condition()
+        self.data_condition = threading.Condition()
         self.lock = threading.Lock()
 
         #variables
-        self.clients = []
-        self.active_clients = 0
         self.status = False
         self.period = period
         self.tcurrency = ["BRENTCMDUSD", "BTCUSD", "EURUSD", "GBPUSD", "USA30IDXUSD", "USA500IDXUSD", "USATECHIDXUSD", "XAGUSD", "XAUUSD",]
         self.data = {}
-        self.confirm_clients = 0
-        self.confirm_markets = 0
         self.data_row = 0
-        self.file_name = "archivo.txt"#"archivo.BYTES"
+        self.file_name = "archivo.txt"
 
         open(self.file_name, 'w').close()
 
@@ -49,22 +45,31 @@ class Broker():
         while True:
             client_connection , client_address = self.server_socket.accept()
             client_thread = threading.Thread(target=self.handler_client, args=(client_connection, client_address))
-            self.clients.append(client_thread)
             client_thread.start()
             
     
     #Gestiona la conexion del cliente
     def handler_client(self, client_connection, client_address):
+        
         print(f'New incomming connection is coming from: {client_address[0]}:{client_address[1]}')
+
+        with self.client_condition:
+            self.client_condition.notify_all()
+
+        currencies = client_connection.recv(self.buffer).decode()
+        while currencies == '':
+            currencies = client_connection.recv(self.buffer).decode()
+
+        currencies = eval(currencies)
+
         current = 0
 
-        try:
-            while True:
-                with self.client_condition:
-                    self.client_condition.notify_all()
-                    time.sleep(0.0001)
+        with self.data_condition:
+            self.data_condition.wait()
 
-                time.sleep(0.0001)
+        try:
+
+            while True:
 
                 with open(self.file_name, 'rb') as archivo:
 
@@ -73,7 +78,6 @@ class Broker():
                     data = file[current]
 
                     client_connection.send(data)
-                    time.sleep(0.001)
 
                     data = client_connection.recv(self.buffer).decode()
                     while not data.startswith("confirm"):
@@ -89,13 +93,15 @@ class Broker():
             print(f"Error {client_address[0]}:{client_address[1]} - {str(e)}")
 
 
-        
-
     def handler_markets(self, currency):
         market_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         market_socket.connect((self.server_address, self.market_port))
         market_socket.send(b'currency: '+currency.encode())
-        time.sleep(0.0001)
+        data = market_socket.recv(self.buffer).decode()
+
+        while data != "ok":
+            data = market_socket.recv(self.buffer).decode()
+
         market_socket.send(b'period: '+self.period.encode())
 
         open(f"{currency}_index.txt", 'w').close()
@@ -126,6 +132,8 @@ class Broker():
                         self.data_row += 1
                     self.lock.release()
 
+                    with self.data_condition:
+                        self.data_condition.notify_all()
 
         
         

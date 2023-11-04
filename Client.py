@@ -1,7 +1,6 @@
 import socket
 import json
 import threading
-import time
 import pandas as pd
 import mplfinance as mpf
 import argparse
@@ -23,9 +22,7 @@ colors = mpf.make_mpf_style(marketcolors=mc)
 pkwargs=dict(type='candle', mav=(5,13), style=colors)
 thread_count = 0
 
-main_fig, main_axes = plt.subplots(3,3)
-plt.ion()
-
+main_fig = main_axes = 0
 #Conditions
 data_condition = threading.Condition()
 lock = threading.Lock()
@@ -33,7 +30,7 @@ lock = threading.Lock()
 
 def trading(currency, positionx, positiony):
     global dictionary, main_axes, main_fig
-
+    
     content = {"Open" : [], "High" : [], "Low" : [], "Close" : []}
     date = []
     df = None
@@ -58,7 +55,10 @@ def trading(currency, positionx, positiony):
             df.index = pd.to_datetime(df.index)
 
             lock.acquire()
-            mpf.plot(df, **pkwargs, axtitle=f"Market {currency}", ax=main_axes[positionx, positiony])
+            try:
+                mpf.plot(df, **pkwargs, axtitle=f"Market {currency}", ax=main_axes[positionx, positiony])
+            except:
+                mpf.plot(df, **pkwargs, axtitle=f"Market {currency}", ax=main_axes[positiony])
             plt.draw()
             lock.release()
             
@@ -67,31 +67,29 @@ def trading(currency, positionx, positiony):
 
 
 def main(currencies):
-    global dictionary, main_fig
+    global dictionary, main_fig, main_axes
+
+    amount_currencies = len(currencies)/3 + 0.4
+    n_rows = round(amount_currencies)
+
+    main_fig, main_axes = plt.subplots(n_rows,3)
+    plt.ion()
+
+    posx = 0
+    posy = 0
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.connect(tuple_connection)
 
-
-    BRENTCMDUSD = threading.Thread(target=trading, args=("BRENTCMDUSD", 0, 0))  #trading("BRENTCMDUSD", 0, 0)
-    BTCUSD = threading.Thread(target=trading, args=("BTCUSD", 0, 1))  #trading("BTCUSD", 0, 1)
-    EURUSD = threading.Thread(target=trading, args=("EURUSD", 0, 2))  #trading("EURUSD", 0, 2)
-    GBPUSD = threading.Thread(target=trading, args=("GBPUSD", 1, 0))  #trading("GBPUSD", 1, 0)
-    USA30IDXUSD = threading.Thread(target=trading, args=("USA30IDXUSD", 1, 1))  #trading("USA30IDXUSD", 1, 1)
-    USA500IDXUSD = threading.Thread(target=trading, args=("USA500IDXUSD", 1, 2))  #trading("USA500IDXUSD", 1, 2)
-    USATECHIDXUSD = threading.Thread(target=trading, args=("USATECHIDXUSD", 2, 0))  #trading("USATECHIDXUSD", 2, 0)
-    XAGUSD = threading.Thread(target=trading, args=("XAGUSD", 2, 1))  #trading("XAGUSD", 2, 1)
-    XAUUSD = threading.Thread(target=trading, args=("XAUUSD", 2, 2))  #trading("XAUUSD", 2, 2)
-
-    BRENTCMDUSD.start()
-    BTCUSD.start()
-    EURUSD.start()
-    GBPUSD.start()
-    USA30IDXUSD.start()
-    USA500IDXUSD.start()
-    USATECHIDXUSD.start()
-    XAGUSD.start()
-    XAUUSD.start()
+    for c in currencies:
+        c = threading.Thread(target=trading, args=(c, posx, posy))
+        c.start()
+        posy += 1
+        if posy == 3:
+            posy = 0
+            posx += 1
+    
+    server_socket.send(str(currencies).encode())
 
     while True:
 
@@ -102,13 +100,12 @@ def main(currencies):
         data = data.replace("'", '"')
         dictionary = json.loads(data)
 
-        plt.pause(0.0001)
+        plt.pause(0.00001)
         plt.tight_layout()
         plt.show()
 
         with data_condition:
             data_condition.notify_all()
-            time.sleep(0.001)
 
         server_socket.send(b'confirm')
 
@@ -118,10 +115,10 @@ def initialize(args):
 
     do = main(currencies)
 
-    print(f'\nstatus: {do}')
+    print(f'\nstatus: {do}')    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--currencies", type=str.upper ,choices=["BRENTCMDUSD", "BTCUSD", "EURUSD", "GBPUSD", "USA30IDXUSD", "USA500IDXUSD", "USATECHIDXUSD", "XAGUSD", "XAUUSD"], default=["BRENTCMDUSD", "BTCUSD", "EURUSD", "GBPUSD", "USA30IDXUSD", "USA500IDXUSD", "USATECHIDXUSD", "XAGUSD", "XAUUSD"], nargs=argparse.REMAINDER, help="Currencies that you want to see")
+    parser.add_argument("-c", "--currencies", type=str.upper, choices=["BRENTCMDUSD", "BTCUSD", "EURUSD", "GBPUSD", "USA30IDXUSD", "USA500IDXUSD", "USATECHIDXUSD", "XAGUSD", "XAUUSD"], default=["BRENTCMDUSD", "BTCUSD", "EURUSD", "GBPUSD", "USA30IDXUSD", "USA500IDXUSD", "USATECHIDXUSD", "XAGUSD", "XAUUSD"], nargs= '+',help="Currencies that you want to see")
     args = parser.parse_args()
     initialize(args)
